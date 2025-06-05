@@ -1,0 +1,167 @@
+basePath: /
+definitions:
+  main.CreateProductRequest:
+    properties:
+      categories:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      name:
+        type: string
+      price:
+        type: number
+    type: object
+  main.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  main.Product:
+    properties:
+      categories:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      price:
+        type: number
+    type: object
+  main.UpdateProductRequest:
+    properties:
+      categories:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      name:
+        type: string
+      price:
+        type: number
+    type: object
+info:
+  contact: {}
+  title: TEST API
+  version: "1.0"
+paths:
+  /api/products:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешный ответ
+          schema:
+            items:
+              $ref: '#/definitions/main.Product'
+            type: array
+        "500":
+          description: Ошибка на сервере
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      summary: Получение списка всех продуктов
+      tags:
+      - Products
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Данные продуктов
+        in: body
+        name: products
+        required: true
+        schema:
+          items:
+            $ref: '#/definitions/main.CreateProductRequest'
+          type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Продукты успешно добавлены
+          schema:
+            items:
+              $ref: '#/definitions/main.Product'
+            type: array
+        "400":
+          description: Некорректный запрос
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+        "500":
+          description: Ошибка на сервере
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      summary: Добавить один или несколько продуктов
+      tags:
+      - Products
+  /api/products/{id}:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID продукта
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Продукт успешно удален
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Ошибка на сервере
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      summary: Удалить продукт
+      tags:
+      - Products
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID продукта
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Данные продукта
+        in: body
+        name: product
+        required: true
+        schema:
+          $ref: '#/definitions/main.UpdateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Продукт успешно обновлен
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Некорректный запрос
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+        "500":
+          description: Ошибка на сервере
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      summary: Обновить данные продукта
+      tags:
+      - Products
+swagger: "2.0"

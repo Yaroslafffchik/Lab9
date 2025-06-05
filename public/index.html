@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Каталог товаров</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f4f4f4;
+        }
+        .container {
+            width: 80%;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            margin-top: 20px;
+        }
+        .card {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            width: 250px;
+            margin: 15px;
+            padding: 15px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .card h3 {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+        .card .price {
+            font-size: 1.1em;
+            color: #2ecc71;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .card .description {
+            font-size: 0.9em;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        .card .categories {
+            font-size: 0.8em;
+            color: #777;
+            margin-bottom: 10px;
+        }
+        .loading {
+            font-size: 1.5em;
+            color: #333;
+            text-align: center;
+            margin-top: 50px;
+        }
+        #chat {
+            width: 80%;
+            max-width: 600px;
+            margin: 20px auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 5px;
+        }
+        #chat-messages {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+        #chat input {
+            width: calc(100% - 100px);
+            padding: 5px;
+        }
+        #chat button {
+            padding: 5px 10px;
+        }
+        #fields-selector {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        #fields-selector label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Каталог товаров</h1>
+
+<div id="fields-selector">
+    <label><input type="checkbox" id="field-name" checked> Название</label>
+    <label><input type="checkbox" id="field-price" checked> Цена</label>
+    <label><input type="checkbox" id="field-description"> Описание</label>
+    <label><input type="checkbox" id="field-categories"> Категории</label>
+    <button onclick="applyFieldSelection()">Применить</button>
+</div>
+
+<div class="loading" id="loading">Загрузка...</div>
+<div class="container" id="product-container"></div>
+
+<div id="chat">
+    <h3>Чат поддержки</h3>
+    <div id="chat-messages"></div>
+    <input id="chat-username" type="text" placeholder="Ваше имя" />
+    <input id="chat-input" type="text" placeholder="Сообщение" />
+    <button onclick="sendChat()">Отправить</button>
+</div>
+
+<script>
+    function buildQuery(selectedFields) {
+        const fields = selectedFields.map(field => `\n          ${field}`).join('');
+        return `
+            query GetProducts {
+                products {
+                    ${fields}
+                }
+            }
+        `;
+    }
+
+    async function fetchProducts(selectedFields) {
+        const query = buildQuery(selectedFields);
+        try {
+            const response = await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query }),
+            });
+            const result = await response.json();
+            document.getElementById('loading').style.display = 'none';
+            const container = document.getElementById('product-container');
+            container.innerHTML = '';
+
+            if (result.data && result.data.products) {
+                result.data.products.forEach(product => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    let cardContent = '';
+
+                    if (selectedFields.includes('name')) {
+                        cardContent += `<h3>${product.name}</h3>`;
+                    }
+                    if (selectedFields.includes('price')) {
+                        cardContent += `<p class="price">${product.price} руб.</p>`;
+                    }
+                    if (selectedFields.includes('description')) {
+                        cardContent += `<p class="description">${product.description}</p>`;
+                    }
+                    if (selectedFields.includes('categories')) {
+                        cardContent += `<p class="categories"><strong>Категории:</strong> ${product.categories.join(', ')}</p>`;
+                    }
+
+                    card.innerHTML = cardContent;
+                    container.appendChild(card);
+                });
+            } else {
+                container.innerHTML = '<p>Товары не найдены</p>';
+            }
+        } catch (error) {
+            document.getElementById('loading').innerText = 'Ошибка загрузки данных!';
+            console.error('Ошибка при загрузке товаров:', error);
+        }
+    }
+
+    function applyFieldSelection() {
+        const selectedFields = [];
+        if (document.getElementById('field-name').checked) selectedFields.push('name');
+        if (document.getElementById('field-price').checked) selectedFields.push('price');
+        if (document.getElementById('field-description').checked) selectedFields.push('description');
+        if (document.getElementById('field-categories').checked) selectedFields.push('categories');
+
+        fetchProducts(selectedFields);
+    }
+
+    const socket = new WebSocket(`ws://${window.location.host}/api/ws`);
+
+    socket.onopen = () => console.log('WebSocket подключен');
+    socket.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        const chatMessages = document.getElementById('chat-messages');
+        const messageElement = document.createElement('p');
+        messageElement.textContent = `${msg.username}: ${msg.message}`;
+        chatMessages.appendChild(messageElement);
+    };
+
+    function sendChat() {
+        const username = document.getElementById('chat-username').value || "Аноним";
+        const message = document.getElementById('chat-input').value;
+        if (message) {
+            socket.send(JSON.stringify({ username, message }));
+            document.getElementById('chat-input').value = "";
+        }
+    }
+
+    window.onload = () => fetchProducts(['name', 'price', 'description', 'categories']);
+</script>
+</body>
+</html>

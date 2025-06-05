@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель товаров</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            width: 80%;
+            margin: auto;
+        }
+        .product {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .form-group {
+            margin-bottom: 10px;
+        }
+        button {
+            cursor: pointer;
+            padding: 8px 16px;
+            font-size: 14px;
+            border: none;
+            border-radius: 5px;
+            background-color: #4CAF50;
+            color: white;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #add-products-form {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+        }
+        .product-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+            border-bottom: 1px dashed #ccc;
+            padding-bottom: 10px;
+        }
+        .product-form input[type="text"],
+        .product-form input[type="number"] {
+            padding: 5px;
+            width: 180px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .product-form input[type="text"]:focus,
+        .product-form input[type="number"]:focus {
+            border-color: #4CAF50;
+        }
+        .product-form button {
+            align-self: center;
+            background-color: #f44336;
+        }
+        .add-products-buttons {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        #chat {
+            width: 100%;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 20px;
+            background-color: #fff;
+            border-radius: 5px;
+        }
+        #chat-messages {
+            height: 150px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+        #chat input {
+            width: calc(100% - 100px);
+            padding: 5px;
+        }
+        #chat button {
+            padding: 5px 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Админ-панель товаров</h1>
+
+    <h2>Добавить товары</h2>
+    <div id="add-products-form">
+        <div class="product-form">
+            <input type="text" class="name" placeholder="Название">
+            <input type="number" class="price" placeholder="Цена">
+            <input type="text" class="description" placeholder="Описание">
+            <input type="text" class="categories" placeholder="Категории (через запятую)">
+            <button onclick="removeProductForm(this)">Удалить</button>
+        </div>
+        <div class="add-products-buttons">
+            <button onclick="addProductForm()">Добавить еще товар</button>
+            <button onclick="addProducts()">Добавить товары</button>
+        </div>
+    </div>
+
+    <h2>Список товаров</h2>
+    <div id="products"></div>
+
+    <div id="chat">
+        <h3>Чат поддержки</h3>
+        <div id="chat-messages"></div>
+        <input id="chat-username" type="text" placeholder="Ваше имя" />
+        <input id="chat-input" type="text" placeholder="Сообщение" />
+        <button onclick="sendChat()">Отправить</button>
+    </div>
+</div>
+
+<script>
+    const wsUrl = '/api/ws';
+    const apiUrl = '/api/products';
+
+    async function fetchProducts() {
+        try {
+            const res = await fetch(apiUrl);
+            if (!res.ok) {
+                console.error('Ошибка при получении товаров');
+                return;
+            }
+            const products = await res.json();
+            const list = document.getElementById('products');
+            list.innerHTML = '';
+            products.forEach(product => {
+                list.innerHTML += `
+            <div class="product" id="product-${product.id}">
+              <strong>${product.name}</strong> - ${product.price} руб.
+              <p>${product.description}</p>
+              <p>Категории: ${product.categories.join(', ')}</p>
+              <button onclick="deleteProduct(${product.id})">Удалить</button>
+              <button onclick="editProduct(${product.id})">Редактировать</button>
+            </div>
+          `;
+            });
+        } catch (error) {
+            console.error('Ошибка при загрузке товаров:', error);
+        }
+    }
+
+    function addProductForm() {
+        const productFormHTML = `
+        <div class="product-form">
+          <input type="text" class="name" placeholder="Название">
+          <input type="number" class="price" placeholder="Цена">
+          <input type="text" class="description" placeholder="Описание">
+          <input type="text" class="categories" placeholder="Категории (через запятую)">
+          <button onclick="removeProductForm(this)">Удалить</button>
+        </div>
+      `;
+        const buttonsBlock = document.querySelector('.add-products-buttons');
+        buttonsBlock.insertAdjacentHTML('beforebegin', productFormHTML);
+    }
+
+    function removeProductForm(button) {
+        const form = button.parentElement;
+        form.parentElement.removeChild(form);
+    }
+
+    async function addProducts() {
+        const productForms = document.querySelectorAll('.product-form');
+        const products = [];
+        productForms.forEach(form => {
+            const name = form.querySelector('.name').value.trim();
+            const priceStr = form.querySelector('.price').value.trim();
+            const description = form.querySelector('.description').value.trim();
+            const categoriesStr = form.querySelector('.categories').value.trim();
+
+            if (!name && !priceStr && !description && !categoriesStr) return;
+
+            const priceNum = parseFloat(priceStr);
+            if (isNaN(priceNum)) {
+                alert(`Некорректное значение цены для товара "${name}". Товар не будет добавлен.`);
+                return;
+            }
+
+            const categories = categoriesStr ? categoriesStr.split(',').map(c => c.trim()) : [];
+            products.push({ name, price: priceNum, description, categories });
+        });
+
+        if (products.length === 0) {
+            alert('Нет валидных товаров для добавления.');
+            return;
+        }
+
+        try {
+            const res = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(products)
+            });
+            if (!res.ok) {
+                const errorData = await res.json();
+                alert(`Ошибка при добавлении товаров: ${errorData.error}`);
+            } else {
+                fetchProducts();
+                const formContainer = document.getElementById('add-products-form');
+                const productForms = formContainer.querySelectorAll('.product-form');
+                productForms.forEach(form => form.remove());
+                addProductForm();
+            }
+        } catch (error) {
+            console.error('Ошибка при отправке запроса:', error);
+        }
+    }
+
+    async function deleteProduct(id) {
+        try {
+            const res = await fetch(`${apiUrl}/${id}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const errorData = await res.json();
+                alert(`Ошибка при удалении товара: ${errorData.error}`);
+            }
+            fetchProducts();
+        } catch (error) {
+            console.error('Ошибка при удалении товара:', error);
+        }
+    }
+
+    async function editProduct(id) {
+        const name = prompt("Введите новое название товара:");
+        if (name === null) return;
+        const priceStr = prompt("Введите новую цену товара:");
+        if (priceStr === null) return;
+        const description = prompt("Введите новое описание товара:");
+        if (description === null) return;
+        const categoriesStr = prompt("Введите новые категории (через запятую):");
+        if (categoriesStr === null) return;
+
+        const priceNum = parseFloat(priceStr.trim());
+        if (isNaN(priceNum)) {
+            alert("Некорректное значение цены.");
+            return;
+        }
+
+        const categories = categoriesStr.trim() ? categoriesStr.split(',').map(c => c.trim()) : [];
+
+        const updatedProduct = {
+            name: name.trim(),
+            price: priceNum,
+            description: description.trim(),
+            categories: categories
+        };
+
+        try {
+            const res = await fetch(`${apiUrl}/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedProduct)
+            });
+            if (!res.ok) {
+                const errorData = await res.json();
+                alert(`Ошибка при обновлении товара: ${errorData.error}`);
+            }
+            fetchProducts();
+        } catch (error) {
+            console.error('Ошибка при обновлении товара:', error);
+        }
+    }
+
+    const socket = new WebSocket(`ws://${window.location.host}/api/ws`);
+
+    socket.onopen = () => console.log('WebSocket подключен');
+    socket.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        const chatMessages = document.getElementById('chat-messages');
+        const messageElement = document.createElement('p');
+        messageElement.textContent = `${msg.username}: ${msg.message}`;
+        chatMessages.appendChild(messageElement);
+    };
+
+    function sendChat() {
+        const username = document.getElementById('chat-username').value || "Аноним";
+        const message = document.getElementById('chat-input').value;
+        if (message) {
+            socket.send(JSON.stringify({ username, message }));
+            document.getElementById('chat-input').value = "";
+        }
+    }
+
+    fetchProducts();
+</script>
+</body>
+</html>
